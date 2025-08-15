@@ -1,0 +1,25 @@
+name: gatk4/callcopyratiosegments
+description: Run GATK CallCopyRatioSegments to call copy-ratio segments
+keywords:
+  - gatk4
+  - cnv
+  - segments
+  - calling
+tools:
+  - gatk4:
+      description: Genome Analysis Toolkit
+      homepage: https://gatk.broadinstitute.org/
+      documentation: https://gatk.broadinstitute.org/hc/en-us/articles/360042477271-CallCopyRatioSegments
+      licence: BSD-3
+input:
+  - meta:
+      type: map
+      description: nf-core meta map with `id`
+  - segments_file:
+      type: file
+      description: Copy-ratio segments from ModelSegments (e.g., *.cr.seg)
+output:
+  - calls:
+      type: file
+      description: Called copy-ratio segments
+      pattern: "*.calls.cns.tsv"

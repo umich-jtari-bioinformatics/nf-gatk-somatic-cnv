@@ -13,12 +13,12 @@ nf-gatk-somatic-cnv/
 │  └─ gatk4/
 │     ├─ collectreadcounts.nf
 │     ├─ createreadcountpanelofnormals.nf
-│     ├─ denoisereadcounts.nf            # local
+│     ├─ denoisereadcounts.nf            
 │     ├─ collectalleliccounts.nf         # local
 │     ├─ modelsegments.nf
 │     ├─ callcopyratiosegments.nf        # local
-│     ├─ preprocessintervals.nf          # local
-│     └─ annotateintervals.nf            # local
+│     ├─ preprocessintervals.nf          
+│     └─ annotateintervals.nf            
 ├─ subworkflows/
 │  ├─ pon_build.nf
 │  └─ somatic_cnv.nf

@@ -1,0 +1,35 @@
+name: gatk4/collectalleliccounts
+description: Run GATK CollectAllelicCounts on CRAM/BAM at given SNP sites VCF
+keywords:
+  - gatk4
+  - cnv
+  - allelic
+  - counts
+tools:
+  - gatk4:
+      description: Genome Analysis Toolkit
+      homepage: https://gatk.broadinstitute.org/
+      documentation: https://gatk.broadinstitute.org/hc/en-us/articles/360037594411-CollectAllelicCounts
+      licence: BSD-3
+input:
+  - meta:
+      type: map
+      description: |
+        nf-core meta map. Must include `id`.
+  - cram:
+      type: file
+      description: CRAM or BAM file
+  - crai:
+      type: file
+      description: CRAM index (.crai) or BAM index (.bai)
+  - reference:
+      type: file
+      description: Reference FASTA
+  - sites_vcf:
+      type: file
+      description: bgzipped and tabix-indexed VCF of common SNP sites
+output:
+  - allelicCounts:
+      type: file
+      description: Tab-delimited allelic counts
+      pattern: "*.allelicCounts.tsv"
