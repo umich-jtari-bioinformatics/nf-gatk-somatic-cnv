@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Somatic CNV samplesheet",
+  "type": "object",
+  "properties": {
+    "columns": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  },
+  "required": ["columns"],
+  "samplesheet_columns": [
+    "sample_id",
+    "type",
+    "cram",
+    "crai",
+    "sex",
+    "tumor_normal_id"
+  ],
+  "description": "CSV header must include: sample_id,type,cram,crai,sex,tumor_normal_id. type in {normal,tumor}; tumor_normal_id optional for tumors."
+}
