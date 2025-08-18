@@ -1,0 +1,4 @@
+sample_id,type,cram,crai,sex,tumor_normal_id
+ALK020-B-02,normal,/home/ubuntu/data2/gatk/data/recalibrated/ALK020-B-02/ALK020-B-02.recal.cram,/home/ubuntu/data2/gatk/data/recalibrated/ALK020-B-02/ALK020-B-02.recal.cram.crai,F
+ALK032-B-01,normal,/home/ubuntu/data2/gatk/data/recalibrated/ALK032-B-02/ALK032-B-01.recal.cram,/home/ubuntu/data2/gatk/data/recalibrated/ALK032-B-01/ALK032-B-01.recal.cram.crai,M
+ALK110-B-01,normal,/home/ubuntu/data2/gatk/data/recalibrated/ALK110-B-01/ALK110-B-02.recal.cram,/home/ubuntu/data2/gatk/data/recalibrated/ALK110-B-01/ALK110-B-01.recal.cram.crai,M

@@ -1,0 +1,6 @@
+# data
+*.fasta
+*.fai
+*.dict
+*.bed
+*.gz
