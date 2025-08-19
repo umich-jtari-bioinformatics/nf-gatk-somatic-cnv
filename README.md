@@ -1,5 +1,7 @@
 # nf-gatk-somatic-cnv
-Implementation of the GATK somatic CNV workflow for WES and WGS data
+A Nextflow DSL2 workflow implementing the GATK somatic CNV pipeline:
+
+`CollectReadCounts → CreateReadCountPanelOfNormals (PoN) → DenoiseReadCounts → CollectAllelicCounts → ModelSegments → CallCopyRatioSegments`
 
 ## Project Structure
 ```
@@ -49,4 +51,37 @@ nf-gatk-somatic-cnv/
 ```
 
 
+## Quick start
 
+```bash
+nextflow run main.nf -profile docker \
+  --samplesheet assets/samplesheet_full.csv \
+  --reference_fasta /path/ref.fa --reference_fai /path/ref.fa.fai --reference_dict /path/ref.dict \
+  --intervals /path/intervals.interval_list \
+  --snp_vcf /path/common_snps.vcf.gz \
+  --outdir results
+```
+
+-- For WES without intervals: add --assay wes --capture_bed /path/capture.bed (omit --intervals)
+
+-- For WGS without intervals: add --assay wgs --bin_length 1000 --interval_padding 0 (omit --intervals)
+
+### Inputs
+
+See `assets/samplesheet_full.csv` and `schemas/samplesheet_schema.json` for required columns.
+
+### Outputs
+`results/pon/pon.hdf5`
+
+Per tumor:
+
+-- `results/denoise/<sample>/<sample>.denoisedCR.tsv`
+
+-- `results/segments/<sample>/<sample>.cr.seg`
+
+-- `results/calls/<sample>/<sample>.called.seg`
+
+### Notes
+	•	CRAMs must match the provided reference (including .dict & .fai)
+	•	Intervals must be consistent across all steps (PoN and tumor)
+	•	SNP VCF must match reference contigs; use common SNPs (gnomAD/1000G)
