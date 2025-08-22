@@ -4,3 +4,4 @@
 *.dict
 *.bed
 *.gz
+*.intervals

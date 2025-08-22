@@ -53,13 +53,18 @@ nf-gatk-somatic-cnv/
 
 ## Quick start
 
+To make a PoN:
 ```bash
-nextflow run main.nf -profile docker \
-  --samplesheet assets/samplesheet_full.csv \
-  --reference_fasta /path/ref.fa --reference_fai /path/ref.fa.fai --reference_dict /path/ref.dict \
-  --intervals /path/intervals.interval_list \
-  --snp_vcf /path/common_snps.vcf.gz \
-  --outdir results
+nextflow run /home/ubuntu/code/nf-gatk-somatic-cnv/main.nf \
+  -profile docker \
+  --samplesheet /home/ubuntu/code/nf-gatk-somatic-cnv/samples/samplesheet_normals.csv \
+  --reference_fasta /home/ubuntu/code/nf-gatk-somatic-cnv/samples/Homo_sapiens_assembly38.fasta \
+  --reference_fai /home/ubuntu/code/nf-gatk-somatic-cnv/samples/Homo_sapiens_assembly38.fasta.fai \
+  --reference_dict /home/ubuntu/code/nf-gatk-somatic-cnv/samples/Homo_sapiens_assembly38.dict \
+  --intervals /home/ubuntu/code/nf-gatk-somatic-cnv/samples/hg38_exome_v2.0.2_targets_sorted_validated.re_annotated.intervals \
+  --snp_vcf /home/ubuntu/code/nf-gatk-somatic-cnv/samples/gnomad.snps.biallelic.norm.common.vcf.gz \
+  --outdir ./results_pon \
+  --build_pon_only true
 ```
 
 -- For WES without intervals: add --assay wes --capture_bed /path/capture.bed (omit --intervals)

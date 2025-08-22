@@ -2,7 +2,7 @@ nextflow.enable.dsl = 2
 
 // Interval generation (nf-core modules)
 include { GATK4_PREPROCESSINTERVALS as PREPROCESS_INTERVALS } from './modules/nf-core/gatk4/preprocessintervals/main.nf'
-include { GATK4_ANNOTATE_INTERVALS  as ANNOTATE_INTERVALS   } from './modules/nf-core/gatk4/annotateintervals/main.nf'
+include { GATK4_ANNOTATEINTERVALS  as ANNOTATE_INTERVALS   } from './modules/nf-core/gatk4/annotateintervals/main.nf'
 
 // Subworkflows
 include { PON_BUILD   } from './subworkflows/pon_build.nf'
@@ -92,7 +92,15 @@ workflow {
         .set { intervals }
 
     // 3) Build PoN if normals exist
-    def has_normals = normals_ch.count().tap { it }.view()
+    //def has_normals = normals_ch.count().tap { it }.view()
+    // count normals (channel that emits a single integer)
+    def normals_count_ch = normals_ch.count()
+
+    // log the count
+    normals_count_ch.view { n -> "Normal samples: ${n}" }
+
+    // boolean-as-channel you can join/map with later
+    def has_normals = normals_count_ch.map { n -> n > 0 }
     pon_ch = has_normals > 0 ? PON_BUILD(normals_ch, intervals, reference_fasta).pon_hdf5 : Channel.empty()
 
     if (params.build_pon_only) {
