@@ -131,24 +131,15 @@ workflow {
 
     if( params.build_pon_only as boolean ) {
         pon_ch.view { p -> "PON written: ${p}" }
-        emit:
-            pon = pon_ch
-        return
+    } else {
+        // 4) Somatic CNV on tumors
+        def common_snps = params.common_snps_vcf ? file(params.common_snps_vcf) : null
+
+        somatic = SOMATIC_CNV(
+            tumors_ch,
+            Channel.empty(),  // normals_ch_opt  
+            intervals_ch,
+            file(params.snp_vcf)  // snp_vcf
+        )
     }
-
-    // 4) Somatic CNV on tumors
-    def common_snps = params.common_snps_vcf ? file(params.common_snps_vcf) : null
-
-    somatic = SOMATIC_CNV(
-        tumors_ch: tumors,          // (sid, cram, crai, tnid)
-        normals_map: normals_map,   // (nid, [cram, crai])  <-- channel
-        fasta: fasta, dict: dict, fai: fai,
-        intervals: intervals_ch,
-        pon_hdf5: pon,
-        snp_vcf: file(params.snp_vcf)  // or null if skipping
-    )
-
-    emit:
-        cr_segments      = somatic.cr_segments
-        calls            = somatic.calls
 }
