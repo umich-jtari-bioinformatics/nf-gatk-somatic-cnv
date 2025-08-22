@@ -1,11 +1,11 @@
 // subworkflows/somatic_cnv.nf  (no dsl directive here)
 
 // --- module includes (directory path, not /main.nf) ---
-include { GATK4_COLLECTREADCOUNTS }     from '../modules/nf-core/gatk4/collectreadcounts'
-include { GATK4_DENOISEREADCOUNTS }     from '../modules/nf-core/gatk4/denoisereadcounts'
-include { GATK4_COLLECTALLELICCOUNTS }  from '../modules/local/gatk4/collectalleliccounts'
-include { GATK4_MODELSEGMENTS }         from '../modules/nf-core/gatk4/modelsegments'
-include { GATK4_CALLCOPYRATIOSEGMENTS } from '../modules/local/gatk4/callcopyratiosegments'
+include { GATK4_COLLECTREADCOUNTS }     from '../modules/nf-core/gatk4/collectreadcounts/main'
+include { GATK4_DENOISEREADCOUNTS }     from '../modules/nf-core/gatk4/denoisereadcounts/main'
+include { GATK4_COLLECTALLELICCOUNTS }  from '../modules/local/gatk4/collectalleliccounts/main'
+include { GATK4_MODELSEGMENTS }         from '../modules/nf-core/gatk4/modelsegments/main'
+include { GATK4_CALLCOPYRATIOSEGMENTS } from '../modules/local/gatk4/callcopyratiosegments/main'
 
 workflow SOMATIC_CNV {
 
