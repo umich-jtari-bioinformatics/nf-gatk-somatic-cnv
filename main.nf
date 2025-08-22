@@ -1,12 +1,19 @@
 nextflow.enable.dsl=2
 
-// Interval generation (nf-core modules) — keep or swap to local wrappers as you prefer
-include { GATK4_PREPROCESSINTERVALS as PREPROCESS_INTERVALS } from './modules/nf-core/gatk4/preprocessintervals/main.nf'
-include { GATK4_ANNOTATEINTERVALS  as ANNOTATE_INTERVALS   } from './modules/nf-core/gatk4/annotateintervals/main.nf'
+// Interval generation (nf-core modules)
+include { GATK4_PREPROCESSINTERVALS as PREPROCESS_INTERVALS } from "${projectDir}/modules/nf-core/gatk4/preprocessintervals/main.nf"
+include { GATK4_ANNOTATEINTERVALS  as ANNOTATE_INTERVALS   } from "${projectDir}/modules/nf-core/gatk4/annotateintervals/main.nf"
+
+// GATK4 modules used by subworkflows (import here to avoid parser grief)
+include { GATK4_COLLECTREADCOUNTS }      from "${projectDir}/modules/nf-core/gatk4/collectreadcounts/main.nf"
+include { GATK4_DENOISEREADCOUNTS }      from "${projectDir}/modules/nf-core/gatk4/denoisereadcounts/main.nf"
+include { GATK4_COLLECTALLELICCOUNTS }   from "${projectDir}/modules/local/gatk4/collectalleliccounts/main.nf"
+include { GATK4_MODELSEGMENTS }          from "${projectDir}/modules/nf-core/gatk4/modelsegments/main.nf"
+include { GATK4_CALLCOPYRATIOSEGMENTS }  from "${projectDir}/modules/local/gatk4/callcopyratiosegments/main.nf"
 
 // Subworkflows from this repo
-include { PON_BUILD   } from './subworkflows/pon_build.nf'
-include { SOMATIC_CNV } from './subworkflows/somatic_cnv.nf'
+include { PON_BUILD }  from "${projectDir}/subworkflows/pon_build.nf"
+include { SOMATIC_CNV } from "${projectDir}/subworkflows/somatic_cnv.nf"
 
 /*
  * Expected params (set in nextflow.config):
