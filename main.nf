@@ -124,7 +124,9 @@ workflow {
     pon_ch = PON_BUILD(
         normals_ch,
         intervals_ch,
-        reference_fasta
+        reference_fasta,
+        reference_fai,
+        reference_dict
     )
 
     if( params.build_pon_only as boolean ) {
