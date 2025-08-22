@@ -1,29 +1,36 @@
-nextflow.enable.dsl = 2
+nextflow.enable.dsl=2
 
-// Interval generation (nf-core modules)
+// Interval generation (nf-core modules) — keep or swap to local wrappers as you prefer
 include { GATK4_PREPROCESSINTERVALS as PREPROCESS_INTERVALS } from './modules/nf-core/gatk4/preprocessintervals/main.nf'
 include { GATK4_ANNOTATEINTERVALS  as ANNOTATE_INTERVALS   } from './modules/nf-core/gatk4/annotateintervals/main.nf'
 
-// Subworkflows
+// Subworkflows from this repo
 include { PON_BUILD   } from './subworkflows/pon_build.nf'
 include { SOMATIC_CNV } from './subworkflows/somatic_cnv.nf'
 
 /*
- * Params (configured in nextflow.config)
- *  --samplesheet
- *  --reference_fasta
- *  --intervals (optional)
- *  --mode ('wgs'|'wes'; default in config)
- *  --bin_length (WGS auto-intervals)
- *  --padding (WES capture padding)
- *  --common_snps_vcf (optional)
- *  --build_pon_only (bool)
- *  --autosomes_only (bool)
+ * Expected params (set in nextflow.config):
+ *   --samplesheet                CSV with sample_id,type,cram,crai,sex,tumor_normal_id
+ *   --reference_fasta            path to .fa/.fasta (with .fai/.dict provided separately in config to modules)
+ *   --reference_dict             path to .dict
+ *   --reference_fai              path to .fai
+ *   --intervals                  EITHER a .interval_list/.intervals OR a .bed (BED triggers preprocess+annotate)
+ *   --mode                       'wes' or 'wgs' (used only when intervals are BED or absent)
+ *   --bin_length                 WGS bin size (when generating)
+ *   --padding                    WES padding (when generating from BED)
+ *   --common_snps_vcf            VCF for allelic counts (optional if skipping allelic counts in your config)
+ *   --build_pon_only             true to stop after PON creation (matches your config)
+ *   --outdir                     output directory
  */
+
 def checkParams() {
-    if (!params.samplesheet)     exit 1, "ERROR: --samplesheet is required"
-    if (!params.reference_fasta) exit 1, "ERROR: --reference_fasta is required"
-    if (!(params.mode in ['wes','wgs'])) exit 1, "ERROR: --mode must be 'wes' or 'wgs'"
+    if( !params.samplesheet )         exit 1, "ERROR: --samplesheet is required."
+    if( !params.reference_fasta )     exit 1, "ERROR: --reference_fasta is required."
+    if( !params.reference_fai )       exit 1, "ERROR: --reference_fai is required."
+    if( !params.reference_dict )      exit 1, "ERROR: --reference_dict is required."
+    if( !params.intervals && params.mode == 'wes' ) {
+        exit 1, "ERROR: WES mode requires --intervals pointing to a BED or an interval_list."
+    }
 }
 
 def parseSamplesheet(csv) {
@@ -32,8 +39,8 @@ def parseSamplesheet(csv) {
         .splitCsv(header:true)
         .map { row ->
             // Expect: sample_id,type,cram,crai,sex,tumor_normal_id
-            def sid   = row.sample_id
-            def type  = row.type?.toLowerCase()
+            def sid   = row.sample_id?.toString()
+            def type  = row.type?.toString()?.toLowerCase()
             def cram  = file(row.cram)
             def crai  = file(row.crai)
             def sex   = row.sex ?: ''
@@ -44,79 +51,104 @@ def parseSamplesheet(csv) {
 }
 
 workflow {
+
     checkParams()
 
-    reference_fasta = file(params.reference_fasta)
+    // Refs
+    def reference_fasta = file(params.reference_fasta)
+    def reference_dict  = file(params.reference_dict)
+    def reference_fai   = file(params.reference_fai)
 
-    // 1) Samples
+    // 1) Samples → channels
     all_samples = parseSamplesheet(params.samplesheet)
 
     normals_ch = all_samples
         .filter { meta, cram, crai, tnorm -> meta.type == 'normal' }
-        .map { meta, cram, crai, tnorm -> tuple(meta, cram, crai) }
+        .map    { meta, cram, crai, tnorm -> tuple(meta, cram, crai) }
 
     tumors_ch = all_samples
         .filter { meta, cram, crai, tnorm -> meta.type == 'tumor' }
-        .map { meta, tcram, tcrai, tnorm ->
-            // Resolve matched normal files if provided
-            def has_normal = tnorm ? true : false
-            def nrec = has_normal ? all_samples
-                .filter { m2, c2, i2, t2 -> m2.id == tnorm && m2.type == 'normal' }
-                .first()
-                .ifEmpty { null } : null
+        .map    { meta, cram, crai, tnorm -> tuple(meta, cram, crai, tnorm) }
 
-            def ncram = nrec ? nrec[1] : null
-            def ncrai = nrec ? nrec[2] : null
+    // Map of normals by sample_id to find matched normals later
+    normals_map = normals_ch
+        .map { meta, cram, crai -> tuple(meta instanceof Map ? meta.id : meta, [cram, crai]) }
 
-            tuple(meta, tcram, tcrai, has_normal, ncram, ncrai)
-        }
-
-    // 2) Intervals: provided or generated (preprocess + annotate)
+    // 2) Intervals: use provided interval_list directly, or preprocess+annotate if BED
     Channel
-        .value(params.intervals ? file(params.intervals) : null)
-        .ifEmpty {
-            def cap_bed = (params.mode == 'wes' && params.intervals) ? file(params.intervals) : null
-            pre = PREPROCESS_INTERVALS(
-                reference: reference_fasta,
-                mode: params.mode,
-                bin_length: params.bin_length as int,
-                padding: params.padding as int,
-                capture_bed: cap_bed
-            )
-            ann = ANNOTATE_INTERVALS(
-                reference: reference_fasta,
-                preprocessed_intervals: pre.out
-            )
-            return ann.out
-        }
-        .set { intervals }
+      .of( params.intervals ? file(params.intervals) : null )
+      .map { it ->
+          if( it == null ) {
+              // No intervals path given; for WGS you could generate by binning, but we enforce an explicit file
+              exit 1, "ERROR: --intervals is required (BED or interval_list)."
+          }
+          def p = it as File
+          def name = p.getName().toLowerCase()
+          if( name.endsWith('.interval_list') || name.endsWith('.intervals') ) {
+              // Already interval_list → pass through
+              tuple(p, null) // (interval_list, annotated)
+          } else if( name.endsWith('.bed') ) {
+              // WES BED → preprocess + annotate via nf-core modules
+              def pre = PREPROCESS_INTERVALS(
+                  reference: reference_fasta,
+                  intervals: p,
+                  // module expects specific flags; bin_length is ignored for WES, padding used
+                  mode: params.mode ?: 'wes',
+                  bin_length: (params.bin_length ?: 1000) as int,
+                  padding: (params.padding ?: 0) as int
+              ).out
 
-    // 3) Build PoN if normals exist
-    //def has_normals = normals_ch.count().tap { it }.view()
-    // count normals (channel that emits a single integer)
-    def normals_count_ch = normals_ch.count()
+              def ann = ANNOTATE_INTERVALS(
+                  reference: reference_fasta,
+                  preprocessed_intervals: pre
+              ).out
 
-    // log the count
-    normals_count_ch.view { n -> "Normal samples: ${n}" }
+              tuple(pre, ann)
+          } else {
+              exit 1, "ERROR: --intervals must be .interval_list/.intervals or .bed, got: ${p}"
+          }
+      }
+      .set { interval_pair }
 
-    // boolean-as-channel you can join/map with later
-    def has_normals = normals_count_ch.map { n -> n > 0 }
-    pon_ch = has_normals > 0 ? PON_BUILD(normals_ch, intervals, reference_fasta).pon_hdf5 : Channel.empty()
+    intervals_ch = interval_pair.map { pre, ann -> pre }
 
-    if (params.build_pon_only) {
-        pon_ch.view { "PON built: ${it}" }
+    // 3) Build PoN from normals (fail if no normals)
+    def normals_count = normals_ch.count().val
+    log.info "Normal samples: ${normals_count}"
+    if( normals_count == 0 ) {
+        exit 1, "No normal samples found in --samplesheet (type=normal). Cannot build PoN."
+    }
+
+    pon_result = PON_BUILD(
+        normals_ch: normals_ch,
+        fasta: reference_fasta,
+        dict: reference_dict,
+        fai: reference_fai,
+        intervals: intervals_ch
+    )
+
+    pon_ch = pon_result.pon
+
+    if( params.build_pon_only as boolean ) {
+        pon_ch.view { p -> "PON written: ${p}" }
         emit:
             pon = pon_ch
         return
     }
 
-    // 4) Somatic CNV
-    common_snps = params.common_snps_vcf ? file(params.common_snps_vcf) : null
+    // 4) Somatic CNV on tumors
+    def common_snps = params.common_snps_vcf ? file(params.common_snps_vcf) : null
 
-    results = SOMATIC_CNV(tumors_ch, intervals, reference_fasta, pon_ch, common_snps)
+    somatic = SOMATIC_CNV(
+        tumors_ch: tumors,          // (sid, cram, crai, tnid)
+        normals_map: normals_map,   // (nid, [cram, crai])  <-- channel
+        fasta: fasta, dict: dict, fai: fai,
+        intervals: intervals_ch,
+        pon_hdf5: pon,
+        snp_vcf: file(params.snp_vcf)  // or null if skipping
+    )
 
     emit:
-        segments        = results.segments
-        allelicSegments = results.allelic_segments
-        calls           = results.calls
+        cr_segments      = somatic.cr_segments
+        calls            = somatic.calls
 }
