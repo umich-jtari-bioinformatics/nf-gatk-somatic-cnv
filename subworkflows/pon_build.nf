@@ -13,7 +13,7 @@ workflow PON_BUILD {
 
     main:
         // Prepare input channels for GATK4_COLLECTREADCOUNTS
-        count_in = normals_ch.combine(Channel.value(intervals)).map { meta, cram, crai, interval_file ->
+        count_in = normals_ch.combine(intervals).map { meta, cram, crai, interval_file ->
             tuple(meta, cram, crai, interval_file)
         }
         
