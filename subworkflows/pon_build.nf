@@ -24,10 +24,14 @@ workflow PON_BUILD {
 
         counts = GATK4_COLLECTREADCOUNTS(count_in, fasta_ch, fai_ch, dict_ch)
 
-        pon = GATK4_CREATEREADCOUNTPANELOFNORMALS(
-            counts.out.map { meta, hdf5 -> hdf5 }.toList()
-        )
+        // Collect all HDF5 files and create a single tuple for PoN creation
+        collected_counts = counts.hdf5
+            .map { meta, hdf5 -> hdf5 }
+            .collect()
+            .map { hdf5_list -> tuple([id: 'pon'], hdf5_list) }
+
+        pon = GATK4_CREATEREADCOUNTPANELOFNORMALS(collected_counts)
 
     emit:
-        pon_hdf5 = pon.out
+        pon_hdf5 = pon.pon
 }
