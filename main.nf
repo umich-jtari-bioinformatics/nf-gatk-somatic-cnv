@@ -89,7 +89,7 @@ workflow {
               // No intervals path given; for WGS you could generate by binning, but we enforce an explicit file
               exit 1, "ERROR: --intervals is required (BED or interval_list)."
           }
-          def p = it as File
+          def p = it
           def name = p.getName().toLowerCase()
           if( name.endsWith('.interval_list') || name.endsWith('.intervals') ) {
               // Already interval_list → pass through
