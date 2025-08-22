@@ -119,22 +119,13 @@ workflow {
 
     intervals_ch = interval_pair.map { pre, ann -> pre }
 
-    // 3) Build PoN from normals (fail if no normals)
-    def normals_count = normals_ch.count().val
-    log.info "Normal samples: ${normals_count}"
-    if( normals_count == 0 ) {
-        exit 1, "No normal samples found in --samplesheet (type=normal). Cannot build PoN."
-    }
+    // 3) Build PoN from normals
 
-    pon_result = PON_BUILD(
-        normals_ch: normals_ch,
-        fasta: reference_fasta,
-        dict: reference_dict,
-        fai: reference_fai,
-        intervals: intervals_ch
+    pon_ch = PON_BUILD(
+        normals_ch,
+        intervals_ch,
+        reference_fasta
     )
-
-    pon_ch = pon_result.pon
 
     if( params.build_pon_only as boolean ) {
         pon_ch.view { p -> "PON written: ${p}" }
