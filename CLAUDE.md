@@ -101,7 +101,44 @@ The main workflow orchestrates two key subworkflows:
 
 ## Development Notes
 
-- The `somatic_cnv.nf` subworkflow is currently a placeholder that needs full implementation
+- The `somatic_cnv.nf` subworkflow has been simplified to a basic placeholder structure to avoid compilation issues
 - All GATK4 modules use nf-core standards except for local custom modules
 - Resource configurations in `conf/base.config` are optimized for the workflow steps
 - The workflow supports both WES and WGS data with appropriate parameter adjustments
+
+## Recent Fixes Applied
+
+**GATK Configuration Issues:**
+- Added `ext.args = '--format HDF5 --interval-set-rule INTERSECTION'` to GATK4_COLLECTREADCOUNTS
+- Added `ext.args = '--interval-merging-rule OVERLAPPING_ONLY'` to GATK4_PREPROCESSINTERVALS
+- Changed `errorStrategy` from problematic closure to simple `'retry'`
+
+**Workflow Structure Fixes:**
+- Fixed channel handling in `pon_build.nf` to use proper `combine()` operations
+- Fixed PREPROCESS_INTERVALS call structure to handle BED files properly
+- Fixed tuple syntax in channel definitions (used `tuple()` wrapper)
+- Fixed intervals channel extraction: `intervals_ch = preprocessed.interval_list.map { meta, interval_list -> interval_list }`
+
+**Known Working State:**
+- PoN building workflow is functional with BED format intervals
+- PREPROCESS_INTERVALS successfully converts BED to interval_list format
+- All channel operations and module calls have been debugged
+- Workflow compiles and begins execution successfully
+
+## Current Issues to Monitor
+
+- Samplesheet paths must be accurate (fixed typos in sample paths)
+- BED files work better than interval_list files with headers for this GATK version
+- The workflow is currently set up for PoN-only mode (`--build_pon_only true`)
+
+## File Format Requirements
+
+**Samplesheet CSV:**
+```csv
+sample_id,type,cram,crai,sex,tumor_normal_id
+ALK020-B-02,normal,/full/path/to/sample.recal.cram,/full/path/to/sample.recal.cram.crai,F
+```
+
+**Intervals:** 
+- BED format works reliably (gets preprocessed automatically)
+- interval_list format with headers can cause parsing issues in some GATK versions

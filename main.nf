@@ -107,7 +107,7 @@ workflow {
             exclude_ch
         )
         
-        intervals_ch = preprocessed.interval_list
+        intervals_ch = preprocessed.interval_list.map { meta, interval_list -> interval_list }
     } else {
         exit 1, "ERROR: --intervals must be .interval_list/.intervals or .bed, got: ${intervals_file}"
     }
