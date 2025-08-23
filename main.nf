@@ -82,42 +82,35 @@ workflow {
         .map { meta, cram, crai -> tuple(meta instanceof Map ? meta.id : meta, [cram, crai]) }
 
     // 2) Intervals: use provided interval_list directly, or preprocess+annotate if BED
-    Channel
-      .of( params.intervals ? file(params.intervals) : null )
-      .map { it ->
-          if( it == null ) {
-              // No intervals path given; for WGS you could generate by binning, but we enforce an explicit file
-              exit 1, "ERROR: --intervals is required (BED or interval_list)."
-          }
-          def p = it
-          def name = p.getName().toLowerCase()
-          if( name.endsWith('.interval_list') || name.endsWith('.intervals') ) {
-              // Already interval_list → pass through
-              tuple(p, null) // (interval_list, annotated)
-          } else if( name.endsWith('.bed') ) {
-              // WES BED → preprocess + annotate via nf-core modules
-              def pre = PREPROCESS_INTERVALS(
-                  reference: reference_fasta,
-                  intervals: p,
-                  // module expects specific flags; bin_length is ignored for WES, padding used
-                  mode: params.mode ?: 'wes',
-                  bin_length: (params.bin_length ?: 1000) as int,
-                  padding: (params.padding ?: 0) as int
-              ).out
-
-              def ann = ANNOTATE_INTERVALS(
-                  reference: reference_fasta,
-                  preprocessed_intervals: pre
-              ).out
-
-              tuple(pre, ann)
-          } else {
-              exit 1, "ERROR: --intervals must be .interval_list/.intervals or .bed, got: ${p}"
-          }
-      }
-      .set { interval_pair }
-
-    intervals_ch = interval_pair.map { pre, ann -> pre }
+    def intervals_file = params.intervals ? file(params.intervals) : null
+    if( !intervals_file ) {
+        exit 1, "ERROR: --intervals is required (BED or interval_list)."
+    }
+    
+    def name = intervals_file.getName().toLowerCase()
+    if( name.endsWith('.interval_list') || name.endsWith('.intervals') ) {
+        // Already interval_list → use directly
+        intervals_ch = Channel.value(intervals_file)
+    } else if( name.endsWith('.bed') ) {
+        // BED → preprocess + annotate via nf-core modules
+        fasta_ch = Channel.value([id: 'ref'], reference_fasta])
+        fai_ch = Channel.value([[:], reference_fai])
+        dict_ch = Channel.value([[:], reference_dict])
+        bed_ch = Channel.value([[:], intervals_file])
+        exclude_ch = Channel.value([[:], []])  // empty exclude intervals
+        
+        preprocessed = PREPROCESS_INTERVALS(
+            fasta_ch,
+            fai_ch,
+            dict_ch,
+            bed_ch,
+            exclude_ch
+        )
+        
+        intervals_ch = preprocessed.interval_list
+    } else {
+        exit 1, "ERROR: --intervals must be .interval_list/.intervals or .bed, got: ${intervals_file}"
+    }
 
     // 3) Build PoN from normals
 
