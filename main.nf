@@ -93,11 +93,11 @@ workflow {
         intervals_ch = Channel.value(intervals_file)
     } else if( name.endsWith('.bed') ) {
         // BED → preprocess + annotate via nf-core modules
-        fasta_ch = Channel.value([id: 'ref'], reference_fasta])
-        fai_ch = Channel.value([[:], reference_fai])
-        dict_ch = Channel.value([[:], reference_dict])
-        bed_ch = Channel.value([[:], intervals_file])
-        exclude_ch = Channel.value([[:], []])  // empty exclude intervals
+        fasta_ch = Channel.value(tuple([id: 'ref'], reference_fasta))
+        fai_ch = Channel.value(tuple([[:], reference_fai]))
+        dict_ch = Channel.value(tuple([[:], reference_dict]))
+        bed_ch = Channel.value(tuple([[:], intervals_file]))
+        exclude_ch = Channel.value(tuple([[:], []]))  // empty exclude intervals
         
         preprocessed = PREPROCESS_INTERVALS(
             fasta_ch,
