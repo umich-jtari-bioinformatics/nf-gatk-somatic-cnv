@@ -5,3 +5,6 @@
 *.bed
 *.gz
 *.intervals
+*.nextflow.log*
+work/
+.nextflow/
