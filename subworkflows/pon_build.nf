@@ -1,6 +1,6 @@
 nextflow.enable.dsl = 2
 
-include { GATK4_COLLECTREADCOUNTS             } from '../modules/nf-core/gatk4/collectreadcounts/main.nf'
+include { GATK4_COLLECTREADCOUNTS as GATK4_COLLECTREADCOUNTS_PON } from '../modules/nf-core/gatk4/collectreadcounts/main.nf'
 include { GATK4_CREATEREADCOUNTPANELOFNORMALS } from '../modules/nf-core/gatk4/createreadcountpanelofnormals/main.nf'
 
 workflow PON_BUILD {
@@ -20,7 +20,7 @@ workflow PON_BUILD {
         fai_ch = Channel.value([[:], reference_fai])
         dict_ch = Channel.value([[:], reference_dict])
 
-        counts = GATK4_COLLECTREADCOUNTS(count_in, fasta_ch, fai_ch, dict_ch)
+        counts = GATK4_COLLECTREADCOUNTS_PON(count_in, fasta_ch, fai_ch, dict_ch)
 
         // Collect all HDF5 files and create a single tuple for PoN creation
         collected_counts = counts.hdf5

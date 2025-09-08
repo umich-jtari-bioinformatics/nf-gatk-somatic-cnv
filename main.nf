@@ -27,6 +27,7 @@ include { SOMATIC_CNV } from "${projectDir}/subworkflows/somatic_cnv.nf"
  *   --padding                    WES padding (when generating from BED)
  *   --common_snps_vcf            VCF for allelic counts (optional if skipping allelic counts in your config)
  *   --build_pon_only             true to stop after PON creation (matches your config)
+ *   --pon_hdf5                   Pre-built panel of normals HDF5 file (optional)
  *   --outdir                     output directory
  */
 
@@ -37,6 +38,9 @@ def checkParams() {
     if( !params.reference_dict )      exit 1, "ERROR: --reference_dict is required."
     if( !params.intervals && params.mode == 'wes' ) {
         exit 1, "ERROR: WES mode requires --intervals pointing to a BED or an interval_list."
+    }
+    if( !params.pon_hdf5 && !params.build_pon_only ) {
+        log.warn "No pre-built PoN provided. Will need normal samples to build PoN."
     }
 }
 
@@ -115,15 +119,21 @@ workflow {
         exit 1, "ERROR: --intervals must be .interval_list/.intervals or .bed, got: ${intervals_file}"
     }
 
-    // 3) Build PoN from normals
-
-    pon_ch = PON_BUILD(
-        normals_ch,
-        intervals_ch,
-        reference_fasta,
-        reference_fai,
-        reference_dict
-    )
+    // 3) PoN handling: use pre-built or build new
+    if( params.pon_hdf5 ) {
+        // Use pre-built PoN
+        pon_ch = Channel.value(file(params.pon_hdf5))
+        log.info "Using pre-built PoN: ${params.pon_hdf5}"
+    } else {
+        // Build PoN from normals
+        pon_ch = PON_BUILD(
+            normals_ch,
+            intervals_ch,
+            reference_fasta,
+            reference_fai,
+            reference_dict
+        )
+    }
 
     if( params.build_pon_only as boolean ) {
         pon_ch.view { p -> "PON written: ${p}" }
@@ -133,9 +143,13 @@ workflow {
 
         somatic = SOMATIC_CNV(
             tumors_ch,
-            Channel.empty(),  // normals_ch_opt  
+            normals_ch,       // Pass normals for matched analysis
+            pon_ch,           // Pass PoN to somatic workflow
             intervals_ch,
-            file(params.snp_vcf)  // snp_vcf
+            file(params.snp_vcf),  // snp_vcf
+            reference_fasta,
+            reference_fai,
+            reference_dict
         )
     }
 }

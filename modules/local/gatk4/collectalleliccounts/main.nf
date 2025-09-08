@@ -12,7 +12,7 @@ process GATK4_COLLECTALLELICCOUNTS {
     container 'broadinstitute/gatk:4.5.0.0'
 
     input:
-    tuple val(meta), path(cram), path(crai), path(reference), path(sites_vcf)
+    tuple val(meta), path(cram), path(crai), path(reference), path(reference_fai), path(reference_dict), path(sites_vcf), path(sites_vcf_tbi)
 
     output:
     tuple val(meta), path("${meta.id}.allelicCounts.tsv")
@@ -21,10 +21,11 @@ process GATK4_COLLECTALLELICCOUNTS {
     cram && sites_vcf
 
     script:
+    def args = task.ext.args ?: ''
     """
     set -euo pipefail
 
-    gatk CollectAllelicCounts \
+    gatk ${args} CollectAllelicCounts \
       -I ${cram} \
       -R ${reference} \
       -L ${sites_vcf} \

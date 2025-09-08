@@ -8,10 +8,11 @@ process GATK4_MODELSEGMENTS {
         'community.wave.seqera.io/library/gatk4_gcnvkernel:e48d414933d188cd' }"
 
     input:
-    tuple val(meta), path(counts)
+    tuple val(meta), path(counts), path(allelic_counts), path(normal_allelic_counts)
 
     output:
     tuple val(meta), path("*.modelFinal.seg"), emit: segmented
+    tuple val(meta), path("*.cr.seg")        , emit: cr_seg
     path "versions.yml"                      , emit: versions
 
     when:
@@ -32,6 +33,8 @@ process GATK4_MODELSEGMENTS {
         ${args} \\
         --tmp-dir . \\
         --denoised-copy-ratios ${counts} \\
+        --allelic-counts ${allelic_counts} \\
+        ${normal_allelic_counts ? "--normal-allelic-counts ${normal_allelic_counts}" : ""} \\
         -O ./ \\
         --output-prefix ${prefix}
 
