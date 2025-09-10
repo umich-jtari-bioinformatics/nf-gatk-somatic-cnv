@@ -101,6 +101,7 @@ Needs a source of SNP loci, e.g. gnomad
 #### For the PoN run
 `results/pon/pon.hdf5`
 
+```
 #### Tumor samples
 results/
 ├── denoise/
@@ -115,9 +116,11 @@ results/
 ├── SOMATIC_CNV:GATK4_CALLCOPYRATIOSEGMENTS
 │   ├── ALK002.P.01.calls.cns.tsv 
 │   └── ALK019.T.01.calls.cns.tsv 
-├── SOMATIC_CNV:GATK4_COLLECTALLELICCOUNTS_TUMOR
-│   ├── ALK002.P.01.allelicCounts.tsv 
+└── SOMATIC_CNV:GATK4_COLLECTALLELICCOUNTS_TUMOR
+    ├── ALK002.P.01.allelicCounts.tsv 
     └── ALK019.T.01.allelicCounts.tsv 
+
+```
 
 ### Notes
 	•	CRAMs must match the provided reference (including .dict & .fai)
