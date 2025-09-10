@@ -8,3 +8,4 @@
 *.nextflow.log*
 work/
 .nextflow/
+CLAUDE.md
