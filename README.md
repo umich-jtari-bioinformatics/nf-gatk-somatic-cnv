@@ -37,21 +37,63 @@ nf-gatk-somatic-cnv/
 │  ├─ tiny_ref.dict                      # stub (placeholder)
 │  ├─ tiny_intervals.bed                 # stub (placeholder)
 │  └─ tiny_snps.vcf.gz.tbi               # stub (placeholder)
-├─ nf-tests/
-│  ├─ nf-test.yml
-│  ├─ subworkflows/
-│  │  ├─ pon_build.test.nf
-│  │  └─ somatic_cnv.test.nf
-│  └─ data/
-│     ├─ normals.csv
-│     ├─ cohort.csv
-│     ├─ tiny_intervals.bed
-│     └─ tiny_snps.vcf.gz.tbi
+│
 └─ README.md
 ```
 
 
-## Quick start
+## Architecture Overview
+
+### Main Workflow (`main.nf`)
+The main workflow orchestrates two key subworkflows:
+1. **PON_BUILD**: Creates Panel of Normals from normal samples
+2. **SOMATIC_CNV**: Processes tumor samples using the PoN (currently a stub/placeholder)
+
+### Key Components
+
+**Modules:**
+- `modules/nf-core/gatk4/`: Standard nf-core GATK4 modules (collectreadcounts, createreadcountpanelofnormals, denoisereadcounts, modelsegments, preprocessintervals, annotateintervals)
+- `modules/local/gatk4/`: Custom local modules (collectalleliccounts, callcopyratiosegments)
+
+**Subworkflows:**
+- `subworkflows/pon_build.nf`: Implements PoN creation workflow
+- `subworkflows/somatic_cnv.nf`: Placeholder for tumor sample processing (needs implementation)
+
+**Configuration:**
+- `nextflow.config`: Main configuration with profiles and parameters
+- `conf/base.config`: Process resource configurations and publishing settings
+- `conf/test.config`: Test-specific configurations
+
+### Data Flow
+
+1. **Sample parsing**: CSV samplesheet parsed to separate normal/tumor samples
+2. **Interval processing**: Handles both BED files (preprocessed/annotated) and interval_list files
+3. **PoN creation**: Normal samples → CollectReadCounts → CreateReadCountPanelOfNormals
+4. **Tumor processing**: Uses PoN for denoising and segmentation (implementation pending)
+
+### Input Requirements
+
+**Samplesheet CSV columns:**
+- `sample_id`: Unique sample identifier
+- `type`: "normal" or "tumor"
+- `cram`: Path to CRAM file
+- `crai`: Path to CRAM index
+- `sex`: Sample sex (optional)
+- `tumor_normal_id`: Matched normal ID for tumor samples
+
+**Required files:**
+- Reference genome (FASTA, FAI, DICT)
+- Intervals (BED or interval_list)
+- SNP VCF for allelic counts (optional)
+
+### Output Structure
+- `results/pon/pon.hdf5`: Panel of Normals
+- `results/denoise/<sample>/<sample>.denoisedCR.tsv`: Denoised copy ratios
+- `results/segments/<sample>/<sample>.cr.seg`: Copy ratio segments
+- `results/calls/<sample>/<sample>.called.seg`: Called segments
+
+
+## Quickstart
 
 To make a PoN:
 ```bash
@@ -101,8 +143,9 @@ Needs a source of SNP loci, e.g. gnomad
 #### For the PoN run
 `results/pon/pon.hdf5`
 
-```
+
 #### Tumor samples
+```
 results/
 ├── denoise/
 │   ├── ALK002.P.01_denoisedCR.tsv
