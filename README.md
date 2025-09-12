@@ -47,7 +47,7 @@ nf-gatk-somatic-cnv/
 ### Main Workflow (`main.nf`)
 The main workflow orchestrates two key subworkflows:
 1. **PON_BUILD**: Creates Panel of Normals from normal samples
-2. **SOMATIC_CNV**: Processes tumor samples using the PoN (currently a stub/placeholder)
+2. **SOMATIC_CNV**: Processes tumor samples using the PoN 
 
 ### Key Components
 
@@ -57,7 +57,7 @@ The main workflow orchestrates two key subworkflows:
 
 **Subworkflows:**
 - `subworkflows/pon_build.nf`: Implements PoN creation workflow
-- `subworkflows/somatic_cnv.nf`: Placeholder for tumor sample processing (needs implementation)
+- `subworkflows/somatic_cnv.nf`: Tumor sample CNV inferrence 
 
 **Configuration:**
 - `nextflow.config`: Main configuration with profiles and parameters
@@ -69,7 +69,7 @@ The main workflow orchestrates two key subworkflows:
 1. **Sample parsing**: CSV samplesheet parsed to separate normal/tumor samples
 2. **Interval processing**: Handles both BED files (preprocessed/annotated) and interval_list files
 3. **PoN creation**: Normal samples → CollectReadCounts → CreateReadCountPanelOfNormals
-4. **Tumor processing**: Uses PoN for denoising and segmentation (implementation pending)
+4. **Tumor processing**: Uses PoN for denoising and segmentation 
 
 ### Input Requirements
 
@@ -88,10 +88,22 @@ The main workflow orchestrates two key subworkflows:
 
 ### Output Structure
 - `results/pon/pon.hdf5`: Panel of Normals
-- `results/denoise/<sample>/<sample>.denoisedCR.tsv`: Denoised copy ratios
-- `results/segments/<sample>/<sample>.cr.seg`: Copy ratio segments
-- `results/calls/<sample>/<sample>.called.seg`: Called segments
+- `results/denoise/<sample>_denoisedCR.tsv`: Denoised copy ratios
+- `results/segments/<sample>.modelFinal.seg`: log2 copy ratio and BAF uncertainty intervals
+- `results/allele_counts/<sample>.allelicCounts.tsv`: Ref and Alt counts and nucleotides for each loci
+- `results/SOMATIC_CNV:GATK4_CALLCOPYRATIOSEGMENTS/<sample>.calls.cns.tsv`: copy number state inferrence 
 
+CALL Column Values:
+
+-  0 = Neutral (copy-neutral, no significant change)
+-  + = Amplification (copy number gain)
+-  - = Deletion (copy number loss)
+
+The CALL is determined by thresholding the log2 copy ratios:
+
+  - MEAN_LOG2_COPY_RATIO ≈ 0 → CALL = 0 (neutral, ~1x relative to baseline)
+  - MEAN_LOG2_COPY_RATIO > threshold → CALL = + (amplification, >1x)
+  - MEAN_LOG2_COPY_RATIO < -threshold → CALL = - (deletion, <1x)
 
 ## Quickstart
 
@@ -99,12 +111,12 @@ To make a PoN:
 ```bash
 nextflow run /path/to/nf-gatk-somatic-cnv/main.nf \
   -profile docker \
-  --samplesheet /home/ubuntu/code/nf-gatk-somatic-cnv/samples/samplesheet_normals.csv \
-  --reference_fasta /home/ubuntu/code/nf-gatk-somatic-cnv/samples/Homo_sapiens_assembly38.fasta \
-  --reference_fai /home/ubuntu/code/nf-gatk-somatic-cnv/samples/Homo_sapiens_assembly38.fasta.fai \
-  --reference_dict /home/ubuntu/code/nf-gatk-somatic-cnv/samples/Homo_sapiens_assembly38.dict \
-  --intervals /home/ubuntu/code/nf-gatk-somatic-cnv/samples/hg38_exome_v2.0.2_targets_sorted_validated.re_annotated.intervals \
-  --snp_vcf /home/ubuntu/code/nf-gatk-somatic-cnv/samples/gnomad.snps.biallelic.norm.common.vcf.gz \
+  --samplesheet /path/to/nf-gatk-somatic-cnv/samples/samplesheet_normals.csv \
+  --reference_fasta /path/to/nf-gatk-somatic-cnv/samples/Homo_sapiens_assembly38.fasta \
+  --reference_fai /path/to/nf-gatk-somatic-cnv/samples/Homo_sapiens_assembly38.fasta.fai \
+  --reference_dict /path/to/code/nf-gatk-somatic-cnv/samples/Homo_sapiens_assembly38.dict \
+  --intervals /path/to/nf-gatk-somatic-cnv/samples/hg38_exome_v2.0.2_targets_sorted_validated.re_annotated.intervals \
+  --snp_vcf /path/to/nf-gatk-somatic-cnv/samples/gnomad.snps.biallelic.norm.common.vcf.gz \
   --outdir ./results_pon \
   --build_pon_only true
 ```
@@ -132,7 +144,7 @@ nextflow run /path/to/nf-gatk-somatic-cnv/main.nf \
 
 ### Inputs
 
-See `samples/samplesheet_normals.csv` for required columns of the samplesheet.
+See above for required columns of the samplesheet
 Assumes indexed cram files of aligned reads
 Requires matching reference.fasta reference.fasta.fai, and reference.dict 
 Takes an intervals file in bed format (for WES data)

@@ -38,44 +38,94 @@ def filter_autosomal_chromosomes(df):
 
 def estimate_baseline_ploidy(segments_df, copy_ratio_df):
     """
-    Estimate baseline tumor ploidy by finding the most common copy number state.
-    Uses histogram-based approach to find the peak copy ratio.
+    Estimate baseline tumor ploidy accounting for GATK PoN normalization.
+    
+    Key insight: GATK normalizes to diploid PoN, so copy ratios represent
+    deviations from tumor baseline, not absolute copy numbers.
+    Use amplification/deletion balance to infer true baseline ploidy.
     """
     # Filter to autosomal chromosomes
     segments_auto = filter_autosomal_chromosomes(segments_df)
     
-    if 'MEAN_LOG2_COPY_RATIO' in segments_auto.columns:
+    if 'MEAN_LOG2_COPY_RATIO' in segments_auto.columns and 'CALL' in segments_auto.columns:
         # Weight by segment length
         segments_auto = segments_auto.copy()
         segments_auto['length'] = segments_auto['END'] - segments_auto['START']
         segments_auto['copy_ratio'] = 2 ** segments_auto['MEAN_LOG2_COPY_RATIO']
         
-        # Create length-weighted histogram
+        total_length = segments_auto['length'].sum()
+        
+        # Analyze call distribution to infer baseline ploidy
+        call_fractions = {}
+        call_mean_cr = {}
+        
+        for call in ['-', '0', '+']:
+            call_segs = segments_auto[segments_auto['CALL'] == call]
+            if len(call_segs) > 0:
+                call_fractions[call] = call_segs['length'].sum() / total_length
+                call_mean_cr[call] = call_segs['copy_ratio'].mean()
+            else:
+                call_fractions[call] = 0.0
+                call_mean_cr[call] = 1.0
+        
+        amp_fraction = call_fractions['+']
+        del_fraction = call_fractions['-']
+        neutral_fraction = call_fractions['0']
+        neutral_cr = call_mean_cr['0']
+        
+        # Method 1: Amplification/deletion balance
+        # Strong excess of amplifications suggests higher baseline ploidy
+        amp_del_ratio = amp_fraction / (del_fraction + 0.01)
+        
+        ploidy_estimates = []
+        
+        # Estimate from amp/del imbalance
+        if amp_del_ratio > 1.5 and amp_fraction > 0.1:
+            # Excess amplifications suggest baseline > 2N
+            balance_ploidy = 2.0 + min(amp_del_ratio - 1.0, 3.0) * 0.5
+            ploidy_estimates.append(balance_ploidy)
+        
+        # Method 2: Neutral region analysis
+        # If neutral regions show copy ratio != 1.0, adjust baseline
+        if neutral_fraction > 0.3:  # Sufficient neutral regions
+            if neutral_cr < 0.95:
+                # Neutral regions appear deleted relative to PoN
+                # Suggests baseline > 2N (PoN thinks it's deletion)
+                cr_ploidy = 2.0 + (1.0 - neutral_cr) * 2.0
+                ploidy_estimates.append(cr_ploidy)
+            elif neutral_cr > 1.05:
+                # Neutral regions appear amplified relative to PoN
+                # Suggests baseline < 2N (unlikely in cancer)
+                cr_ploidy = 2.0 * neutral_cr
+                ploidy_estimates.append(cr_ploidy)
+        
+        # Method 3: Traditional histogram approach (as fallback)
         weighted_ratios = []
         for _, seg in segments_auto.iterrows():
-            # Weight each segment by its length (in 1Mb bins)
             weight = max(1, int(seg['length'] / 1000000))
             weighted_ratios.extend([seg['copy_ratio']] * weight)
         
         if weighted_ratios:
-            # Find the mode using histogram
             ratios_array = np.array(weighted_ratios)
-            # Create histogram with reasonable bins
-            hist, bin_edges = np.histogram(ratios_array, bins=50, range=(0.5, 4.0))
-            
-            # Find the peak (mode)
+            hist, bin_edges = np.histogram(ratios_array, bins=50, range=(0.3, 6.0))
             peak_idx = np.argmax(hist)
             peak_copy_ratio = (bin_edges[peak_idx] + bin_edges[peak_idx + 1]) / 2
             
-            # Convert to ploidy (assuming diploid baseline)
-            baseline_ploidy = peak_copy_ratio * 2
-            
-            # Apply reasonable bounds
-            return max(1.5, min(baseline_ploidy, 6.0))
+            # For GATK data, peak represents tumor baseline relative to diploid PoN
+            hist_ploidy = 2.0 * peak_copy_ratio
+            ploidy_estimates.append(hist_ploidy)
+        
+        # Consensus ploidy estimate
+        if ploidy_estimates:
+            baseline_ploidy = np.median(ploidy_estimates)
+            # Apply reasonable bounds but allow higher ploidy
+            return max(1.5, min(baseline_ploidy, 8.0))
+        else:
+            return 2.0
     
     return 2.0  # Default diploid
 
-def estimate_purity_from_baf(model_segments_df, min_segment_length=5e6):
+def estimate_purity_from_baf(model_segments_df, min_segment_length=2e6):
     """
     Estimate purity from BAF patterns in copy-neutral LOH and deletions.
     
@@ -112,10 +162,10 @@ def estimate_purity_from_baf(model_segments_df, min_segment_length=5e6):
                 
             copy_ratio = 2 ** log2_cr
             
-            # Copy-neutral segments (copy ratio 0.8-1.2)
-            if 0.8 <= copy_ratio <= 1.2:
+            # Copy-neutral segments (copy ratio 0.7-1.3)
+            if 0.7 <= copy_ratio <= 1.3:
                 # If this segment shows LOH (low minor allele fraction)
-                if maf < 0.4:  # Should be ~0.5 in heterozygous diploid
+                if maf < 0.45:  # Should be ~0.5 in heterozygous diploid
                     # In pure tumor: maf would be ~0
                     # In impure tumor: maf = purity * 0 + (1-purity) * 0.5 = (1-purity) * 0.5
                     # So: purity = 1 - 2*maf (when expected pure maf = 0)
@@ -133,12 +183,12 @@ def estimate_purity_from_baf(model_segments_df, min_segment_length=5e6):
             
         copy_ratio = 2 ** log2_cr
         
-        # Heterozygous deletion (copy ratio 0.4-0.7)
-        if 0.4 <= copy_ratio <= 0.7:
+        # Heterozygous deletion (copy ratio 0.3-0.8)
+        if 0.3 <= copy_ratio <= 0.8:
             # In pure tumor, remaining allele should be either A or B (maf ~0 or ~1)
             # In impure tumor, gets diluted toward 0.5
             deviation_from_half = abs(maf - 0.5)
-            if deviation_from_half > 0.1:  # Some signal
+            if deviation_from_half > 0.05:  # Some signal
                 # Estimate purity from how far from 0.5 the BAF is
                 # Pure tumor: maf = 0 or 1
                 # Impure: maf = purity * (0 or 1) + (1-purity) * 0.5
@@ -172,15 +222,15 @@ def estimate_purity_from_copy_ratio(segments_df, estimated_ploidy=2.0):
     segments_auto['length'] = segments_auto['END'] - segments_auto['START']
     segments_auto['copy_ratio'] = 2 ** segments_auto['MEAN_LOG2_COPY_RATIO']
     
-    # Look for clear amplifications (copy ratio > 1.5) and deletions (copy ratio < 0.8)
-    amplifications = segments_auto[segments_auto['copy_ratio'] > 1.5]
+    # Look for clear amplifications (copy ratio > 1.3) and deletions (copy ratio < 0.8)
+    amplifications = segments_auto[segments_auto['copy_ratio'] > 1.3]
     deletions = segments_auto[segments_auto['copy_ratio'] < 0.8]
     
     purity_estimates = []
     
     # For amplifications: observed = purity * true + (1-purity) * 2
     for _, seg in amplifications.iterrows():
-        if seg['length'] > 5e6:  # Minimum 5Mb
+        if seg['length'] > 2e6:  # Minimum 2Mb
             observed_cr = seg['copy_ratio']
             # Assume true copy number in pure tumor would be 3 or 4
             for true_cn in [3, 4, 5, 6]:
@@ -193,7 +243,7 @@ def estimate_purity_from_copy_ratio(segments_df, estimated_ploidy=2.0):
     
     # For deletions: similar logic
     for _, seg in deletions.iterrows():
-        if seg['length'] > 5e6:
+        if seg['length'] > 2e6:
             observed_cr = seg['copy_ratio']
             # Assume true copy number in pure tumor would be 1 or 0
             for true_cn in [0, 1]:
@@ -273,6 +323,7 @@ def generate_report(copy_ratio_file, segments_file, model_segments_file, sample_
     # Estimate purity using multiple methods
     purity_estimates = []
     methods = []
+    failed_methods = []
     
     # Method 1: BAF-based estimation
     if model_segments_df is not None:
@@ -282,7 +333,10 @@ def generate_report(copy_ratio_file, segments_file, model_segments_file, sample_
             methods.append(f"BAF analysis")
             print(f"Purity from BAF analysis: {purity_baf:.2f} ± {purity_baf_std:.2f}")
         else:
+            failed_methods.append("BAF: No suitable segments found")
             print("Purity from BAF analysis: Unable to estimate")
+    else:
+        failed_methods.append("BAF: Model segments file missing")
     
     # Method 2: Copy ratio shift
     if segments_df is not None:
@@ -292,9 +346,13 @@ def generate_report(copy_ratio_file, segments_file, model_segments_file, sample_
             methods.append("Copy ratio analysis")
             print(f"Purity from copy ratio analysis: {purity_cr:.2f} ± {purity_cr_std:.2f}")
         else:
+            failed_methods.append("Copy ratio: No clear CNAs found")
             print("Purity from copy ratio analysis: Unable to estimate")
+    else:
+        failed_methods.append("Copy ratio: Segments file missing")
     
     # Method 3: Overall distribution shift
+    median_cr = None
     if copy_ratio_df is not None:
         median_cr = estimate_median_copy_ratio_shift(copy_ratio_df)
         if median_cr is not None:
@@ -304,6 +362,61 @@ def generate_report(copy_ratio_file, segments_file, model_segments_file, sample_
                 print("Overall copy ratio distribution: Close to diploid baseline")
             else:
                 print(f"Overall copy ratio distribution: Shifted from diploid baseline")
+    
+    # Calculate fraction of genome with copy number alterations
+    genome_alteration_fraction = None
+    if segments_df is not None:
+        segments_auto = filter_autosomal_chromosomes(segments_df)
+        if 'CALL' in segments_auto.columns:
+            segments_auto = segments_auto.copy()
+            segments_auto['length'] = segments_auto['END'] - segments_auto['START']
+            total_length = segments_auto['length'].sum()
+            
+            # Calculate fractions for each call type
+            call_fractions = {}
+            for call in ['-', '0', '+']:
+                call_segs = segments_auto[segments_auto['CALL'] == call]
+                call_fractions[call] = call_segs['length'].sum() / total_length if len(call_segs) > 0 else 0
+            
+            genome_alteration_fraction = call_fractions['+'] + call_fractions['-']
+            
+            print(f"Genome composition: {call_fractions['+']:.1%} amplified, {call_fractions['0']:.1%} neutral, {call_fractions['-']:.1%} deleted")
+            print(f"Total genome altered: {genome_alteration_fraction:.1%}")
+            
+            # Assess genomic instability level
+            if genome_alteration_fraction > 0.4:
+                instability_level = "High"
+            elif genome_alteration_fraction > 0.15:
+                instability_level = "Moderate"  
+            elif genome_alteration_fraction > 0.05:
+                instability_level = "Low"
+            else:
+                instability_level = "Minimal"
+            print(f"Genomic instability: {instability_level}")
+    
+    # Method 4: Fallback purity estimation from CALL distribution
+    # If no clear CNAs found by primary methods, look at overall genomic instability
+    if not purity_estimates and segments_df is not None:
+        segments_auto = filter_autosomal_chromosomes(segments_df)
+        if 'CALL' in segments_auto.columns:
+            segments_auto = segments_auto.copy()
+            segments_auto['length'] = segments_auto['END'] - segments_auto['START']
+            total_length = segments_auto['length'].sum()
+            
+            # Calculate fraction of genome with any CNA
+            altered_segs = segments_auto[segments_auto['CALL'] != '0']
+            altered_fraction = altered_segs['length'].sum() / total_length if len(altered_segs) > 0 else 0
+            
+            # If significant portion of genome shows CNAs, estimate purity from instability
+            if altered_fraction > 0.05:  # At least 5% of genome altered
+                # More instability suggests higher purity
+                instability_purity = min(0.9, 0.3 + altered_fraction * 0.8)
+                purity_estimates.append(instability_purity)
+                methods.append("Genomic instability")
+                print(f"Purity from genomic instability: {instability_purity:.2f} ({altered_fraction:.1%} genome altered)")
+            else:
+                failed_methods.append("Instability: Low genomic alteration")
+                print(f"Purity from genomic instability: Unable to estimate ({altered_fraction:.1%} genome altered)")
     
     # Consensus estimate
     if purity_estimates:
@@ -343,9 +456,15 @@ def generate_report(copy_ratio_file, segments_file, model_segments_file, sample_
                 f.write(f"Estimated tumor purity: Unable to estimate\n")
             
             f.write(f"\nMethods used: {', '.join(methods) if methods else 'None'}\n")
+            if failed_methods:
+                f.write(f"Failed methods: {'; '.join(failed_methods)}\n")
             
             if median_cr is not None:
                 f.write(f"Median copy ratio: {median_cr:.3f}\n")
+            
+            if genome_alteration_fraction is not None:
+                f.write(f"Genome altered: {genome_alteration_fraction:.1%}\n")
+                f.write(f"Genomic instability: {instability_level}\n")
         
         print(f"\nReport saved to: {output_file}")
     
@@ -355,7 +474,11 @@ def generate_report(copy_ratio_file, segments_file, model_segments_file, sample_
         'estimated_purity': consensus_purity,
         'purity_range': purity_range if purity_estimates else None,
         'confidence': quality if purity_estimates else 'Unable to estimate',
-        'median_copy_ratio': median_cr
+        'median_copy_ratio': median_cr,
+        'genome_alteration_fraction': genome_alteration_fraction,
+        'genomic_instability': instability_level if genome_alteration_fraction is not None else None,
+        'methods_used': ', '.join(methods) if methods else 'None',
+        'failed_methods': '; '.join(failed_methods) if failed_methods else 'None'
     }
 
 def main():

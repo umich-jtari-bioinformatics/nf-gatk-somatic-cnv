@@ -3,7 +3,7 @@
 set -euo pipefail
 
 RESULTS_DIR="/Users/pulintz/Data/JTSI/Sequencing/jtari_patient_sequencing/nf-gatk-somatic-cnv/results"
-SCRIPT_DIR="~/Code/nf-gatk-somatic-cnv/scripts"
+SCRIPT_DIR="/Users/pulintz/Code/nf-gatk-somatic-cnv/scripts"
 SCRIPT_PATH="$SCRIPT_DIR/estimate_purity_ploidy.py"
 
 if [ ! -d "$RESULTS_DIR" ]; then
@@ -101,7 +101,7 @@ echo ""
 echo "Creating summary report..."
 
 summary_file="purity_ploidy_reports/cohort_summary.tsv"
-echo -e "Sample_ID\tEstimated_Purity\tPurity_Range_Min\tPurity_Range_Max\tEstimated_Ploidy\tConfidence\tMedian_Copy_Ratio" > "$summary_file"
+printf "Sample_ID\tEstimated_Purity\tEstimated_Ploidy\tConfidence\tMedian_Copy_Ratio\tGenome_Altered\tGenomic_Instability\tMethods_Used\tFailed_Methods\n" > "$summary_file"
 
 for report_file in purity_ploidy_reports/*_purity_ploidy_report.txt; do
     if [ ! -f "$report_file" ]; then
@@ -111,20 +111,15 @@ for report_file in purity_ploidy_reports/*_purity_ploidy_report.txt; do
     sample_id=$(basename "$report_file" _purity_ploidy_report.txt)
     
     purity=$(grep "Estimated tumor purity:" "$report_file" | cut -d: -f2 | tr -d ' ' || echo "NA")
-    purity_range=$(grep "Purity range:" "$report_file" | cut -d: -f2 | tr -d ' ' || echo "NA")
     ploidy=$(grep "Estimated tumor ploidy:" "$report_file" | cut -d: -f2 | tr -d ' ' || echo "NA")
     confidence=$(grep "Confidence:" "$report_file" | cut -d: -f2 | tr -d ' ' || echo "NA")
     median_cr=$(grep "Median copy ratio:" "$report_file" | cut -d: -f2 | tr -d ' ' || echo "NA")
+    genome_altered=$(grep "Genome altered:" "$report_file" | cut -d: -f2 | tr -d ' ' || echo "NA")
+    instability=$(grep "Genomic instability:" "$report_file" | cut -d: -f2 | tr -d ' ' || echo "NA")
+    methods_used=$(grep "Methods used:" "$report_file" | cut -d: -f2- | sed 's/^ *//' || echo "NA")
+    failed_methods=$(grep "Failed methods:" "$report_file" | cut -d: -f2- | sed 's/^ *//' || echo "NA")
     
-    if [ "$purity_range" != "NA" ] && [[ "$purity_range" == *" - "* ]]; then
-        purity_min=$(echo "$purity_range" | cut -d' ' -f1)
-        purity_max=$(echo "$purity_range" | cut -d' ' -f3)
-    else
-        purity_min="NA"
-        purity_max="NA"
-    fi
-    
-    echo -e "$sample_id\t$purity\t$purity_min\t$purity_max\t$ploidy\t$confidence\t$median_cr" >> "$summary_file"
+    printf "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n" "$sample_id" "$purity" "$ploidy" "$confidence" "$median_cr" "$genome_altered" "$instability" "$methods_used" "$failed_methods" >> "$summary_file"
 done
 
 echo "Summary report created: $summary_file"
