@@ -95,9 +95,9 @@ The main workflow orchestrates two key subworkflows:
 
 CALL Column Values:
 
--  0 = Neutral (copy-neutral, no significant change)
--  + = Amplification (copy number gain)
--  - = Deletion (copy number loss)
+-  '0' = Neutral (copy-neutral, no significant change)
+-  '+' = Amplification (copy number gain)
+-  '-' = Deletion (copy number loss)
 
 The CALL is determined by thresholding the log2 copy ratios:
 
@@ -181,3 +181,37 @@ results/
 	•	CRAMs must match the provided reference (including .dict & .fai)
 	•	Intervals must be consistent across all steps (PoN and tumor)
 	•	SNP VCF must match reference contigs; use common SNPs (gnomAD/1000G)
+
+
+### Scripts
+####  `genes_to_cnv_calls.py`: 
+  - Reads GTF file - Extracts gene coordinates and names
+  - Reads GATK calls.cns.tsv - Gets copy number segments with CALL values
+  - Maps genes to calls - Finds overlapping segments for each gene
+  - Outputs BED file - Each gene with its copy number status
+
+  Usage:
+  
+  python3 scripts/genes_to_cnv_calls.py \
+    --gtf /path/to/genes.gtf \
+    --calls calls_copyratiosegments/ALK019.T.01.calls.cns.tsv \
+    --sample ALK019.T.01 \
+    --output ALK019.T.01_gene_cnv_calls.bed
+  
+  Output BED format:
+
+      chr1    1000    5000    GENE1;amplified;log2cr=0.535    1000
+      chr1    6000    8000    GENE2;neutral;log2cr=-0.017     500
+      chr2    2000    4000    GENE3;deleted;log2cr=-0.408     0
+
+  - Overlaps: Uses maximum overlap when gene spans multiple segments
+  - Descriptive names: GENE_NAME;call_type;log2cr=value
+  - BED scores for visualization:  1000=amplified (red), 500=neutral (gray), 0=deleted (blue)
+
+
+
+#### `run_gene_cnv_mapping_cohort.sh`
+```
+    cd /Users/pulintz/Data/JTSI/Sequencing/jtari_patient_sequencing/nf-gatk-somatic-cnv/results
+    ~/Code/nf-gatk-somatic-cnv/scripts/run_gene_cnv_mapping_cohort.sh
+```
